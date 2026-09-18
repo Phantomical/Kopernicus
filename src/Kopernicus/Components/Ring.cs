@@ -26,10 +26,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using Kopernicus.Components.ModularComponentSystem;
 using Kopernicus.Components.Serialization;
-using Kopernicus.OnDemand;
 using UnityEngine;
 
 namespace Kopernicus.Components
@@ -77,15 +75,11 @@ namespace Kopernicus.Components
         public Single longitudeOfAscendingNode;
 
         /// <summary>
-        /// The ring's material, built by RingLoader from the config.
+        /// The ring's material, built by RingLoader from the config. RingLoader also attaches the
+        /// MeshRenderer and wires up on-demand textures, since it can do so via the same
+        /// MaterialLoader.OnParentApply(GameObject) path used for scaled-space bodies.
         /// </summary>
         public Material material;
-
-        /// <summary>
-        /// Textures the material deferred to on-demand loading, as shader property name to texture
-        /// path.
-        /// </summary>
-        public Dictionary<String, String> materialOnDemandTextures;
 
         public Single radiusMultiplier = 1.0F;
 
@@ -229,7 +223,14 @@ namespace Kopernicus.Components
             meshFilter.mesh.RecalculateBounds();
             meshFilter.sharedMesh = meshFilter.mesh;
 
-            ringMr = gameObject.AddComponent<MeshRenderer>();
+            // RingLoader normally already attached the MeshRenderer and material (via
+            // MaterialLoader.OnParentApply) before this ring's config even finished parsing. Fall
+            // back to creating both here for a Ring set up without going through RingLoader.
+            ringMr = gameObject.GetComponent<MeshRenderer>();
+            if (ringMr == null)
+            {
+                ringMr = gameObject.AddComponent<MeshRenderer>();
+            }
 
             if (material == null)
             {
@@ -238,23 +239,6 @@ namespace Kopernicus.Components
 
             ringMr.sharedMaterial = material;
             _hasRuntimeLighting = material.HasProperty(SunPosRelativeToPlanet);
-
-            // Can't reuse MaterialLoader.OnParentApply(GameObject) here: it assumes the target
-            // GameObject already has a Renderer, but ours is only added a few lines above. RingLoader
-            // can't call it either, since BuildRing() (and thus this renderer) doesn't exist yet at
-            // config-parsing time - it runs later, from Start() or a Kittopia rebuild.
-            if (materialOnDemandTextures != null && materialOnDemandTextures.Count > 0)
-            {
-                ScaledSpaceOnDemand onDemandLoader = gameObject.GetComponent<ScaledSpaceOnDemand>();
-                if (onDemandLoader == null)
-                {
-                    onDemandLoader = gameObject.AddComponent<ScaledSpaceOnDemand>();
-                }
-
-                onDemandLoader.Entries = materialOnDemandTextures
-                    .Select(kv => new OnDemandTextureEntry(kv.Key, kv.Value))
-                    .ToList();
-            }
 
             material.SetFloat(InnerRadius, innerRadius * localScale.x);
             material.SetFloat(OuterRadius, outerRadius * localScale.x);

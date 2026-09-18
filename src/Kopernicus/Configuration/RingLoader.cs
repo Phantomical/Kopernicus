@@ -334,7 +334,6 @@ namespace Kopernicus.Configuration
         [KittopiaDescription("Updates the mesh of the planetary ring.")]
         public void RebuildRing()
         {
-            Object.DestroyImmediate(Value.GetComponent<MeshRenderer>());
             Object.DestroyImmediate(Value.GetComponent<MeshFilter>());
             Value.BuildRing();
         }
@@ -392,10 +391,19 @@ namespace Kopernicus.Configuration
         // Post-Apply event
         void IParserEventSubscriber.PostApply(ConfigNode node)
         {
-
             (RingMaterial as MaterialLoader.RingsLoader)?.ApplyDeferred();
             Value.material = RingMaterial.Value;
-            Value.materialOnDemandTextures = RingMaterial.Entries;
+
+            // Ring's own mesh geometry can only be built once the parent body's scale is known, so
+            // that still happens lazily in Ring.Start(). The renderer and material don't have that
+            // dependency, so attach them now and let MaterialLoader.OnParentApply wire up on-demand
+            // textures, just like it does for scaled-space bodies (ScaledVersionLoader).
+            if (Value.gameObject.GetComponent<MeshRenderer>() == null)
+            {
+                Value.gameObject.AddComponent<MeshRenderer>();
+            }
+
+            RingMaterial.OnParentApply(Value.gameObject);
 
             Events.OnRingLoaderPostApply.Fire(this, node);
         }
