@@ -323,8 +323,7 @@ namespace Kopernicus.Configuration
         // Material of our ring
         [ParserTarget("Material", AllowMerge = true, GetChild = false)]
         [KittopiaUntouchable]
-        [KittopiaDescription("Shader and material properties for the ring. Omit to keep the built-in "
-                             + "shader chosen by useNewShader/unlit.")]
+        [KittopiaDescription("Shader and material properties for the ring.")]
         public MaterialLoader.MaterialLoader RingMaterial { get; set; }
 
         [ParserTargetCollection("Components", AllowMerge = true, NameSignificance = NameSignificance.Type)]

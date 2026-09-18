@@ -238,6 +238,11 @@ namespace Kopernicus.Components
 
             ringMr.sharedMaterial = material;
             _hasRuntimeLighting = material.HasProperty(SunPosRelativeToPlanet);
+
+            // Can't reuse MaterialLoader.OnParentApply(GameObject) here: it assumes the target
+            // GameObject already has a Renderer, but ours is only added a few lines above. RingLoader
+            // can't call it either, since BuildRing() (and thus this renderer) doesn't exist yet at
+            // config-parsing time - it runs later, from Start() or a Kittopia rebuild.
             if (materialOnDemandTextures != null && materialOnDemandTextures.Count > 0)
             {
                 ScaledSpaceOnDemand onDemandLoader = gameObject.GetComponent<ScaledSpaceOnDemand>();
@@ -282,8 +287,7 @@ namespace Kopernicus.Components
         }
 
         /// <summary>
-        /// Fallback shader for a ring built in code. Which shader a parsed ring gets is decided by
-        /// its config, in RingLoader.
+        /// Default ring shader.
         /// </summary>
         private const String RING_SHADER = "Kopernicus/Rings";
 
