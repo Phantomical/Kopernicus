@@ -220,6 +220,10 @@ namespace Kopernicus
             AddKscScatterMask();
         }
 
+        // Texture used by the KSC scatter mask. Authored with north up and
+        // covering 1400m on each side of the KSC.
+        private const String KSC_SCATTER_MASK_TEXTURE = "Kopernicus/PluginData/Textures/kscMask.dds";
+
         // Add a scatter mask around the KSC so that stock scatters don't spawn
         // on top of the space center.
         private static void AddKscScatterMask()
@@ -236,24 +240,26 @@ namespace Kopernicus
             if (ksc == null)
                 return;
 
-            // Run after every mod that is already on the template
-            var order = pqs.GetComponentsInChildren<PQSMod>(true).Select(m => m.order).DefaultIfEmpty(0).Max() + 1;
-            var mask = Utility.AddMod<PQSMod_ScatterMask>(pqs, order);
-            mask.name = "KSCScatterMask";
-
-            // Center the mask on the KSC. repositionRadial is a body-local direction
-            // and body-local +Y is the north pole, mirroring GetRelSurfaceNVector.
-            Vector3d dir = ((Vector3d)ksc.repositionRadial).normalized;
-            mask.lat = Math.Asin(dir.y) * MathUtility.Rad2Deg;
-            mask.lon = Math.Atan2(dir.z, dir.x) * MathUtility.Rad2Deg;
-
-            // The mask texture was authored with north up, covering 1400m on each side of the KSC.
+            // Run just before PQSLandControl, which reads allowScatter while placing scatters.
+            // Mods that want to influence the mask's result need to order themselves before it.
+            PQSLandControl landControl = pqs.GetComponentsInChildren<PQSLandControl>(true)
+                .OrderBy(m => m.order).FirstOrDefault();
+            Int32 order = landControl != null
+                ? landControl.order - 1
+                : pqs.GetComponentsInChildren<PQSMod>(true).Select(m => m.order).DefaultIfEmpty(0).Max() + 1;
+            PQSMod_ScatterMask mask = Utility.AddMod<PQSMod_ScatterMask>(pqs, order);
+            mask.name = PQSMod_ScatterMask.KscMaskName;
             mask.width = 2800.0;
             mask.angle = 0.0f;
 
             MapSOParserGreyScale<KopernicusMapSO> parser = new MapSOParserGreyScale<KopernicusMapSO>();
-            parser.SetFromString("Kopernicus/PluginData/Textures/kscMask.dds");
-            mask.mask = parser.Value;
+            parser.SetFromString(KSC_SCATTER_MASK_TEXTURE);
+            mask.mask = parser.Value ?? throw new InvalidOperationException(
+                "Failed to load the KSC scatter mask texture " + KSC_SCATTER_MASK_TEXTURE);
+
+            // Center the mask on the KSC. Components.KSC moves it again if a
+            // SpaceCenter node relocates the KSC.
+            mask.SetCenter(ksc.repositionRadial);
         }
         #endregion
 

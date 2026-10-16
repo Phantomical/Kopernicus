@@ -23,20 +23,20 @@
 * https://kerbalspaceprogram.com
 */
 
-using Kopernicus.ConfigParser.Attributes;
-using Kopernicus.ConfigParser.BuiltinTypeParsers;
-using Kopernicus.ConfigParser.Enumerations;
-using Kopernicus.Configuration.ModLoader;
-using Kopernicus.Configuration.Parsing;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 namespace Kopernicus.Components;
 
 public class PQSMod_ScatterMask : PQSMod
 {
+    /// <summary>
+    /// Name of the scatter mask that Kopernicus adds around the KSC (see
+    /// <c>Injector.AddKscScatterMask</c>). <c>Components.KSC</c> re-centers
+    /// the mask with this name when a <c>SpaceCenter</c> node moves the KSC.
+    /// </summary>
+    public const string KscMaskName = "KopernicusKSCScatterMask";
+
     #region Config
     // These define the center of the scatter mask on the surface, in degrees.
     public double lat;
@@ -52,15 +52,11 @@ public class PQSMod_ScatterMask : PQSMod
     // Turn this on to show the color map for debugging reasons.
     public bool debugShowColorMap;
 
-    // The mask texture. 
+    // The mask texture.
     public MapSO mask;
     #endregion
 
     #region Derived State
-    // The position of the mask center on the sphere surface, in
-    // planet-local coordinates.
-    private Vector3d position;
-
     // Unit direction from the planet center to the mask center.
     private Vector3d normal;
 
@@ -75,8 +71,48 @@ public class PQSMod_ScatterMask : PQSMod
         if (debugShowColorMap)
             requirements |= PQS.ModiferRequirements.MeshColorChannel;
 
-        normal = Planetarium.SphericalVector(lat * MathUtility.Deg2Rad, lon * MathUtility.Deg2Rad).xzy;
-        position = normal * sphere.radius;
+        SetCenter(lat, lon);
+
+        if (mask == null)
+        {
+            Debug.LogWarning("PQSMod_ScatterMask: No mask specified, planet: " + sphere.name);
+            modEnabled = false;
+        }
+
+        if (!(width > 0.0))
+        {
+            Debug.LogWarning("PQSMod_ScatterMask: width must be positive, planet: " + sphere.name);
+            modEnabled = false;
+        }
+    }
+
+    /// <summary>
+    /// Move the mask center to the given latitude and longitude, in degrees.
+    /// </summary>
+    public void SetCenter(double latitude, double longitude)
+    {
+        lat = latitude;
+        lon = longitude;
+        UpdateBasis(Planetarium.SphericalVector(lat * MathUtility.Deg2Rad, lon * MathUtility.Deg2Rad).xzy);
+    }
+
+    /// <summary>
+    /// Move the mask center to the surface point in the given body-local
+    /// direction (e.g. <see cref="PQSCity.repositionRadial"/>).
+    /// </summary>
+    public void SetCenter(Vector3d radial)
+    {
+        Vector3d dir = radial.normalized;
+
+        // Body-local +Y is the north pole, mirroring CelestialBody.GetRelSurfaceNVector.
+        lat = Math.Asin(Math.Max(-1.0, Math.Min(1.0, dir.y))) * MathUtility.Rad2Deg;
+        lon = Math.Atan2(dir.z, dir.x) * MathUtility.Rad2Deg;
+        UpdateBasis(dir);
+    }
+
+    private void UpdateBasis(Vector3d dir)
+    {
+        normal = dir;
 
         // Build an east/north tangent basis at the mask center. The planet's
         // local +Y axis is its north pole.
@@ -92,12 +128,6 @@ public class PQSMod_ScatterMask : PQSMod
         var sin = Math.Sin(angle * MathUtility.Deg2Rad);
         uAxis = east * cos + north * sin;
         vAxis = north * cos - east * sin;
-
-        if (mask == null)
-        {
-            Debug.LogWarning("PQSMod_ScatterMask: No mask specified, planet: " + sphere.name);
-            modEnabled = false;
-        }
     }
 
     public override void OnVertexBuild(PQS.VertexBuildData data)
@@ -120,9 +150,6 @@ public class PQSMod_ScatterMask : PQSMod
         if (u < 0.0 || u > 1.0)
             return;
         if (v < 0.0 || v > 1.0)
-            return;
-
-        if (mask is null)
             return;
 
         var value = mask.GetPixelFloat(u, v);

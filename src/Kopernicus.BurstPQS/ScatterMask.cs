@@ -38,37 +38,22 @@ public class ScatterMask(PQSMod_ScatterMask mod)
 {
     private const double Sqrt2 = 1.4142135623730951;
 
-    private BurstMapSO? mask;
-
-    public override void OnSetup()
-    {
-        base.OnSetup();
-
-        if (mod.mask is not null)
-            mask = BurstMapSO.Create(mod.mask);
-    }
-
-    public override void Dispose()
-    {
-        base.Dispose();
-
-        mask?.Dispose();
-        mask = null;
-    }
-
     public override void OnQuadPreBuild(PQ quad, BatchPQSJobSet jobSet)
     {
         base.OnQuadPreBuild(quad, jobSet);
 
         if (mod.debugShowColorMap || QuadOverlapsMask(quad))
-            jobSet.Add(new BuildJob(mod, mask));
+            jobSet.Add(new BuildJob(mod));
     }
 
-
     [BurstCompile(FloatMode = FloatMode.Fast)]
-    struct BuildJob(PQSMod_ScatterMask mod, BurstMapSO? mask) : IBatchPQSVertexJob
+    struct BuildJob(PQSMod_ScatterMask mod) : IBatchPQSVertexJob, IDisposable
     {
-        public BurstMapSO? mask = mask;
+        // A per-quad view of the mask texture, released in Dispose once the
+        // quad has been built.
+        public BurstMapSO? mask = mod.mask is not null
+            ? BurstMapSO.Create(mod.mask)
+            : null;
 
         public Vector3d normal = mod.normal;
         public Vector3d uAxis = mod.uAxis;
@@ -106,7 +91,7 @@ public class ScatterMask(PQSMod_ScatterMask mod)
                     continue;
 
                 var value = mask.GetPixelFloat(u, v);
-                var allowScatter =  value > 0.01f;
+                var allowScatter = value > 0.01f;
 
                 data.allowScatter[i] &= allowScatter;
                 if (debugShowColorMap)
@@ -114,6 +99,11 @@ public class ScatterMask(PQSMod_ScatterMask mod)
             }
         }
 
+        public void Dispose()
+        {
+            mask?.Dispose();
+            mask = null;
+        }
     }
 
     /// <summary>
@@ -123,9 +113,10 @@ public class ScatterMask(PQSMod_ScatterMask mod)
     /// <returns></returns>
     private bool QuadOverlapsMask(PQ quad)
     {
-        var quadPos = quad.positionPlanetRelative * mod.sphere.radius;
+        var radius = mod.sphere.radius;
+        var quadPos = quad.positionPlanetRelative * radius;
         return WithinRadius(
-            mod.position,
+            mod.normal * radius,
             quadPos,
             (0.5 * mod.width + quad.scalePlanetRelative) * Sqrt2
         );

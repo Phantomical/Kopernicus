@@ -131,6 +131,13 @@ namespace Kopernicus.Components
                 repositionRadial = _ksc.repositionRadial;
             }
 
+            // Keep the scatter mask Kopernicus adds around the KSC centered on it
+            PQSMod_ScatterMask scatterMask = _body.pqsController
+                .GetComponentsInChildren<PQSMod_ScatterMask>(true)
+                .FirstOrDefault(m => m.name == PQSMod_ScatterMask.KscMaskName);
+            if (scatterMask != null)
+                scatterMask.SetCenter(_ksc.repositionRadial);
+
             if (reorientInitialUp.HasValue)
             {
                 _ksc.reorientInitialUp = reorientInitialUp.Value;
